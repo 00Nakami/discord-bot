@@ -1,0 +1,35 @@
+{
+  "1224026714410057763": {
+    "win": 35,
+    "lose": 43,
+    "draw": 40,
+    "streak": 1,
+    "max_streak": 3,
+    "lose_streak": 0,
+    "max_lose_streak": 3,
+    "draw_streak": 0,
+    "max_draw_streak": 5
+  },
+  "1246033433831149636": {
+    "win": 2,
+    "lose": 2,
+    "draw": 3,
+    "streak": 1,
+    "max_streak": 1,
+    "lose_streak": 0,
+    "max_lose_streak": 0,
+    "draw_streak": 0,
+    "max_draw_streak": 0
+  },
+  "1227953233654452235": {
+    "win": 4,
+    "lose": 5,
+    "draw": 5,
+    "streak": 1,
+    "max_streak": 2,
+    "lose_streak": 0,
+    "max_lose_streak": 2,
+    "draw_streak": 0,
+    "max_draw_streak": 4
+  }
+}
