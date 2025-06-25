@@ -14,6 +14,7 @@ import asyncio
 from data import all_items, rarity_info  # ← これで使えるようになる
 from discord import ui
 
+
 # --- 環境変数読み込み ---
 load_dotenv()
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
@@ -396,82 +397,69 @@ async def bedwarskit(interaction: discord.Interaction):
     await interaction.followup.send(f"💯 {interaction.user.mention} さんにおすすめのキットは **{choice}** なえ〜！")
 
 # ====== 計算コマンド ======
-
-import random
-from discord import ui
-from discord.ext import commands
-
-# 出題履歴（クールタイムなどで使いたければ）
 pending_questions = {}
 
-@bot.tree.command(name="sansuu", description="算数クイズに答えてナエンをゲットなえ！")
-async def calculate(interaction: discord.Interaction):
+@bot.tree.command(name="sansuu", description="計算問題に正解してナエンをゲットするなえ！")
+async def mathquiz(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
+    coins.setdefault(user_id, 1000)
 
+    # ランダムな問題を生成
+    operators = ['+', '-', '×']
+    operator = random.choice(operators)
+    a, b = random.randint(1, 20), random.randint(1, 20)
+
+    if operator == '+':
+        answer = a + b
+    elif operator == '-':
+        answer = a - b
+    elif operator == '×':
+        answer = a * b
+
+    question = f"{a} {operator} {b} = ?"
+
+    # 応答遅延
     try:
         await interaction.response.defer(thinking=True)
     except discord.errors.InteractionResponded:
         pass
 
-    # 問題の種類をランダムに選択（+ - ×）
-    operation = random.choice(["+", "-", "×"])
-
-    if operation == "+":
-        a, b = random.randint(1, 30), random.randint(1, 30)
-        answer = a + b
-    elif operation == "-":
-        a, b = sorted([random.randint(1, 30), random.randint(1, 30)], reverse=True)  # マイナス回避
-        answer = a - b
-    else:  # ×
-        a, b = random.randint(1, 12), random.randint(1, 12)
-        answer = a * b
-
-    # 選択肢の作成
-    choices = [answer]
-    while len(choices) < 4:
-        fake = answer + random.randint(-5, 5)
-        if fake != answer and fake >= 0 and fake not in choices:
-            choices.append(fake)
-    random.shuffle(choices)
-
-    # ボタンクラス
-    class AnswerView(ui.View):
-        def __init__(self):
-            super().__init__(timeout=15)
-            for choice in choices:
-                self.add_item(ui.Button(label=str(choice), style=discord.ButtonStyle.primary, custom_id=str(choice)))
-
-        async def interaction_check(self, i: discord.Interaction) -> bool:
-            return i.user.id == interaction.user.id
-
-        async def on_timeout(self):
-            await interaction.followup.send("⏰ 時間切れなえ！また挑戦してなえ！", ephemeral=True)
-
-    view = AnswerView()
-
-    async def on_button_click(i: discord.Interaction):
-        selected = int(i.data["custom_id"])
-        if selected == answer:
-            # コイン付与
-            if user_id not in coins:
-                coins[user_id] = 1000
-            coins[user_id] += 100
-            save_coins()
-            await i.response.send_message(f"✅ 正解なえ！100ナエンゲット！現在の所持ナエン：{coins[user_id]}", ephemeral=True)
-        else:
-            await i.response.send_message(f"❌ 不正解なえ！正解は {answer} なえ！", ephemeral=True)
-        view.stop()
-
-    # 各ボタンにコールバックを設定
-    for item in view.children:
-        if isinstance(item, ui.Button):
-            item.callback = on_button_click
-
-    await interaction.followup.send(
-        f"🧠 **問題:** {a} {operation} {b} = ?\n選択肢から選んでなえ！",
-        view=view,
-        ephemeral=True
+    # 出題用Embedを送信
+    embed = discord.Embed(
+        title="🧮 計算クイズ",
+        description=question,
+        color=discord.Color.blurple()
     )
+    embed.set_footer(text="15秒以内に正しい数字を送ってなえ！")
+
+    quiz_message = await interaction.followup.send(embed=embed)
+
+    # 回答を待機
+    def check(msg):
+        return (
+            msg.author.id == interaction.user.id and
+            msg.channel == interaction.channel and
+            msg.content.strip().lstrip('-').isdigit()
+        )
+
+    try:
+        user_msg = await bot.wait_for("message", timeout=15.0, check=check)
+        user_answer = int(user_msg.content.strip())
+        if user_answer == answer:
+            reward = random.randint(50, 150)
+            coins[user_id] += reward
+            save_coins()
+            await user_msg.reply(f"🎉 正解なえ！ +{reward}ナエンゲット！\n🪙 所持ナエン：{coins[user_id]}ナエン")
+        else:
+            await user_msg.reply(f"❌ 残念なえ…答えは `{answer}` だったなえ。")
+    except asyncio.TimeoutError:
+        await interaction.followup.send(f"⌛ 時間切れなえ…答えは `{answer}` だったなえ。", ephemeral=True)
+
+    # 出題メッセージを削除（エラー防止付き）
+    try:
+        await quiz_message.delete()
+    except discord.NotFound:
+        pass
 
 # ====== スロット（ベット機能付き） ======
 
