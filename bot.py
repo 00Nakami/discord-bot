@@ -1,3 +1,6 @@
+from keep_alive import keep_alive
+keep_alive()
+
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -19,6 +22,7 @@ if not DISCORD_TOKEN:
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+
 
 # --- ファイルパス ---
 STATS_FILE = "stats.json"
