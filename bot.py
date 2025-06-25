@@ -12,6 +12,7 @@ import os
 from dotenv import load_dotenv
 import asyncio
 from data import all_items, rarity_info  # ← これで使えるようになる
+from discord import ui
 
 # --- 環境変数読み込み ---
 load_dotenv()
@@ -407,24 +408,38 @@ pending_questions = {}
 async def calculate(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
 
-    # 問題生成
-    a = random.randint(1, 20)
-    b = random.randint(1, 20)
-    answer = a + b
-    choices = [answer, answer + random.randint(1, 5), answer - random.randint(1, 5)]
-    choices = list(set(choices))  # 重複除去
+    try:
+        await interaction.response.defer(thinking=True)
+    except discord.errors.InteractionResponded:
+        pass
+
+    # 問題の種類をランダムに選択（+ - ×）
+    operation = random.choice(["+", "-", "×"])
+
+    if operation == "+":
+        a, b = random.randint(1, 30), random.randint(1, 30)
+        answer = a + b
+    elif operation == "-":
+        a, b = sorted([random.randint(1, 30), random.randint(1, 30)], reverse=True)  # マイナス回避
+        answer = a - b
+    else:  # ×
+        a, b = random.randint(1, 12), random.randint(1, 12)
+        answer = a * b
+
+    # 選択肢の作成
+    choices = [answer]
+    while len(choices) < 4:
+        fake = answer + random.randint(-5, 5)
+        if fake != answer and fake >= 0 and fake not in choices:
+            choices.append(fake)
     random.shuffle(choices)
 
+    # ボタンクラス
     class AnswerView(ui.View):
         def __init__(self):
             super().__init__(timeout=15)
-
             for choice in choices:
                 self.add_item(ui.Button(label=str(choice), style=discord.ButtonStyle.primary, custom_id=str(choice)))
-
-        @ui.button(label="ボタン", style=discord.ButtonStyle.primary)
-        async def button_callback(self, interaction: discord.Interaction, button: ui.Button):
-            pass  # dummy (上で動的にボタン作成)
 
         async def interaction_check(self, i: discord.Interaction) -> bool:
             return i.user.id == interaction.user.id
@@ -432,31 +447,28 @@ async def calculate(interaction: discord.Interaction):
         async def on_timeout(self):
             await interaction.followup.send("⏰ 時間切れなえ！また挑戦してなえ！", ephemeral=True)
 
-        async def on_error(self, error: Exception, item, interaction: discord.Interaction):
-            await interaction.followup.send("⚠️ エラーが発生したなえ！", ephemeral=True)
-
     view = AnswerView()
 
     async def on_button_click(i: discord.Interaction):
         selected = int(i.data["custom_id"])
         if selected == answer:
-            # 正解時のコイン付与
+            # コイン付与
             if user_id not in coins:
                 coins[user_id] = 1000
             coins[user_id] += 100
             save_coins()
-            await i.response.send_message(f"✅ 正解なえ！100ナエン獲得！\n現在のナエン: {coins[user_id]}", ephemeral=True)
+            await i.response.send_message(f"✅ 正解なえ！100ナエンゲット！現在の所持ナエン：{coins[user_id]}", ephemeral=True)
         else:
-            await i.response.send_message(f"❌ 残念、正解は {answer} だったなえ！", ephemeral=True)
-
+            await i.response.send_message(f"❌ 不正解なえ！正解は {answer} なえ！", ephemeral=True)
         view.stop()
 
+    # 各ボタンにコールバックを設定
     for item in view.children:
         if isinstance(item, ui.Button):
             item.callback = on_button_click
 
-    await interaction.response.send_message(
-        f"🧠 **問題:** {a} + {b} は？ 選択肢から答えてなえ！",
+    await interaction.followup.send(
+        f"🧠 **問題:** {a} {operation} {b} = ?\n選択肢から選んでなえ！",
         view=view,
         ephemeral=True
     )
