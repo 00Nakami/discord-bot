@@ -1083,7 +1083,7 @@ async def help_command(interaction: discord.Interaction):
         "`/avatar` - 指定したユーザーのアイコンを表示するなえ！\n"
     ), inline=False)
 
-    embed.set_footer(text="なえくんBotで遊んでくれてありがとうなえ〜！")
+    embed.set_footer(text="なえくんBotで遊んでくれてありなえ〜！")
 
     await interaction.response.send_message(embed=embed)
 
