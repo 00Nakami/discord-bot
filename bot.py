@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 import asyncio
 from data import all_items, rarity_info  # ← これで使えるようになる
 from discord import ui
+from save_to_github import save_to_github
+import subprocess
 
 
 # --- 環境変数読み込み ---
@@ -57,6 +59,10 @@ def load_stats():
     else:
         stats = {}
 
+def save_items():
+    with open("items.json", "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+
 def save_stats():
     with open(STATS_FILE, "w", encoding="utf-8") as f:
         json.dump(stats, f, ensure_ascii=False, indent=2)
@@ -94,8 +100,25 @@ def add_item_to_user(user_id: str, item_name: str, count: int = 1):
         items[user_id][item_name] = count
     save_items(items)
 
+def save_to_github():
+    try:
+        subprocess.run(["git", "add", "coins.json", "items.json"], check=True)
+        # 差分がある場合のみコミット・プッシュ
+        result = subprocess.run(["git", "diff", "--cached", "--quiet"])
+        if result.returncode != 0:
+            subprocess.run(["git", "commit", "-m", "Auto-save: updated data"], check=True)
+            subprocess.run(["git", "push", "origin", "main"], check=True)
+            print("✅ 変更を GitHub に保存しました")
+        else:
+            print("🕊️ 変更はなかったので push しませんでした")
+    except subprocess.CalledProcessError as e:
+        print("⚠️ GitHub 保存中にエラー:", e)
+
+
 load_stats()
 load_coins()
+save_items()
+save_to_github()
 
 # --- ユーティリティ関数 ---
 
@@ -325,7 +348,7 @@ async def janken_ranking(interaction: discord.Interaction):
 
 # ====== おみくじ ======
 
-@bot.tree.command(name="naemikuji", description="なえみくじ引いて行くなえ？（1回100ナエン）")
+@bot.tree.command(name="naemikuji", description="なえみくじ引いて行くなえ？（1回1000ナエン）")
 async def omikuji(interaction: discord.Interaction):
     try:
         await interaction.response.defer(thinking=True)
@@ -335,25 +358,25 @@ async def omikuji(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
     initialize_user_coins(user_id)
 
-    if coins[user_id] < 100:
+    if coins[user_id] < 1000:
         await interaction.followup.send(f"❌ ナエンが足りないなえ！現在の所持: {coins[user_id]}ナエン", ephemeral=True)
         return
 
-    coins[user_id] -= 100
+    coins[user_id] -= 1000
 
     results = ["大苗 🎉", "中苗 😊", "苗 🙂", "小苗 😌", "末苗 😐", "狐 😢", "大狐 😱"]
     choice = random.choice(results)
 
     if choice.startswith("大苗"):
-        reward = 1000
+        reward = 10000
     elif choice.startswith("中苗"):
-        reward = 200
+        reward = 2000
     elif choice.startswith("狐") and not choice.startswith("大狐"):
-        reward = 50
+        reward = 500
     elif choice.startswith("大狐"):
         reward = 0
     else:
-        reward = 100
+        reward = 1000
 
     coins[user_id] += reward
     save_coins()
@@ -461,12 +484,77 @@ async def mathquiz(interaction: discord.Interaction):
     except discord.NotFound:
         pass
 
+# ====== 計算コマンド(激むず) ======
+pending_questions = {}
+
+@bot.tree.command(name="sansuu_hell", description="計算問題に正解してナエンをゲットするなえ！（激むず）")
+async def mathquiz(interaction: discord.Interaction):
+    user_id = str(interaction.user.id)
+    coins.setdefault(user_id, 1000)
+
+    # ランダムな問題を生成
+    operators = ['+', '-', '×']
+    operator = random.choice(operators)
+    a, b = random.randint(1000, 9999), random.randint(1000, 9999)
+
+    if operator == '+':
+        answer = a + b
+    elif operator == '-':
+        answer = a - b
+    elif operator == '×':
+        answer = a * b
+
+    question = f"{a} {operator} {b} = ?"
+
+    # 応答遅延
+    try:
+        await interaction.response.defer(thinking=True)
+    except discord.errors.InteractionResponded:
+        pass
+
+    # 出題用Embedを送信
+    embed = discord.Embed(
+        title="🧮 計算クイズ（激むず）",
+        description=question,
+        color=discord.Color.blurple()
+    )
+    embed.set_footer(text="15秒以内に正しい数字を送ってなえ！")
+
+    quiz_message = await interaction.followup.send(embed=embed)
+
+    # 回答を待機
+    def check(msg):
+        return (
+            msg.author.id == interaction.user.id and
+            msg.channel == interaction.channel and
+            msg.content.strip().lstrip('-').isdigit()
+        )
+
+    try:
+        user_msg = await bot.wait_for("message", timeout=15.0, check=check)
+        user_answer = int(user_msg.content.strip())
+        if user_answer == answer:
+            reward = random.randint(5000, 15000)
+            coins[user_id] += reward
+            save_coins()
+            await user_msg.reply(f"🎉 正解なえ！ +{reward}ナエンゲット！\n🪙 所持ナエン：{coins[user_id]}ナエン")
+        else:
+            await user_msg.reply(f"❌ 残念なえ…答えは `{answer}` だったなえ。")
+    except asyncio.TimeoutError:
+        await interaction.followup.send(f"⌛ 時間切れなえ…答えは `{answer}` だったなえ。", ephemeral=True)
+
+    # 出題メッセージを削除（エラー防止付き）
+    try:
+        await quiz_message.delete()
+    except discord.NotFound:
+        pass
+
 # ====== スロット（ベット機能付き） ======
 
 class SlotView(View):
     def __init__(self, user, bet):
         super().__init__(timeout=60)
-        self.emojis = ["🐧", "🍒", "🔔", "🦊", "🐟", "😹"]
+        self.emojis = ["🐧", "🐹", "🦊", "🐟", "😹"]
         self.running = False
         self.message = None
         self.user = user
@@ -1088,7 +1176,7 @@ async def help_command(interaction: discord.Interaction):
     ), inline=False)
 
     embed.add_field(name="🧮 計算", value=(
-        "`/sansuu` - 簡単な整数計算ができるなえ！（使うだけで100ナエンもらえる！）"
+        "`/sansuu` - 計算問題ができるなえ！（正解するたびにナエンがもらなえ！）"
     ), inline=False)
 
     embed.add_field(name="🥱 便利", value=(

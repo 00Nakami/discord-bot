@@ -1,13 +1,11 @@
+import os
 import subprocess
-import datetime
 
-def backup_to_github():
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    # git add / commit / push
-    subprocess.run(["git", "add", "coins.json"])
-    subprocess.run(["git", "commit", "-m", f"Backup coins.json at {timestamp}"])
-    subprocess.run(["git", "push", "origin", "main"])  # or your branch name
-
-if __name__ == "__main__":
-    backup_to_github()
+def save_to_github():
+    try:
+        subprocess.run(["git", "add", "coins.json", "items.json"], check=True)
+        subprocess.run(["git", "commit", "-m", "Auto-save: coins & items updated"], check=True)
+        subprocess.run(["git", "push", "origin", "main"], check=True)
+        print("✅ GitHub に coins.json と items.json を保存しました")
+    except subprocess.CalledProcessError as e:
+        print("⚠️ GitHub への保存でエラー:", e)
