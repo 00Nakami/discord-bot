@@ -396,58 +396,70 @@ async def bedwarskit(interaction: discord.Interaction):
 
 # ====== 計算コマンド ======
 
-@bot.tree.command(name="sansuu", description="整数の計算をするなえ！")
-@app_commands.describe(
-    a="整数1つ目なえ",
-    b="整数2つ目なえ",
-    op="演算子を選ぶなえ〜"
-)
-@app_commands.choices(op=[
-    app_commands.Choice(name="足し算（+）", value="+"),
-    app_commands.Choice(name="引き算（-）", value="-"),
-    app_commands.Choice(name="掛け算（×）", value="×"),
-    app_commands.Choice(name="割り算（÷）", value="÷"),
-])
-async def calc(interaction: discord.Interaction, a: int, b: int, op: app_commands.Choice[str]):
-    try:
-        await interaction.response.defer()
-    except discord.errors.InteractionResponded:
-        pass
+import random
+from discord import ui
+from discord.ext import commands
 
+# 出題履歴（クールタイムなどで使いたければ）
+pending_questions = {}
+
+@bot.tree.command(name="sansuu", description="算数クイズに答えてナエンをゲットなえ！")
+async def calculate(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
-    if user_id not in coins:
-        coins[user_id] = 1000  # 初期ナエン
 
-    try:
-        if op.value == "+":
-            res = a + b
-        elif op.value == "-":
-            res = a - b
-        elif op.value == "×":
-            res = a * b
-        elif op.value == "÷":
-            if b == 0:
-                await interaction.followup.send("❌ 0で割るのはできなえ！")
-                return
-            quotient = a // b
-            remainder = a % b
-            await interaction.followup.send(f"{a} ÷ {b} = {quotient} あまり {remainder}")
-            # 計算成功として100ナエン付与
+    # 問題生成
+    a = random.randint(1, 20)
+    b = random.randint(1, 20)
+    answer = a + b
+    choices = [answer, answer + random.randint(1, 5), answer - random.randint(1, 5)]
+    choices = list(set(choices))  # 重複除去
+    random.shuffle(choices)
+
+    class AnswerView(ui.View):
+        def __init__(self):
+            super().__init__(timeout=15)
+
+            for choice in choices:
+                self.add_item(ui.Button(label=str(choice), style=discord.ButtonStyle.primary, custom_id=str(choice)))
+
+        @ui.button(label="ボタン", style=discord.ButtonStyle.primary)
+        async def button_callback(self, interaction: discord.Interaction, button: ui.Button):
+            pass  # dummy (上で動的にボタン作成)
+
+        async def interaction_check(self, i: discord.Interaction) -> bool:
+            return i.user.id == interaction.user.id
+
+        async def on_timeout(self):
+            await interaction.followup.send("⏰ 時間切れなえ！また挑戦してなえ！", ephemeral=True)
+
+        async def on_error(self, error: Exception, item, interaction: discord.Interaction):
+            await interaction.followup.send("⚠️ エラーが発生したなえ！", ephemeral=True)
+
+    view = AnswerView()
+
+    async def on_button_click(i: discord.Interaction):
+        selected = int(i.data["custom_id"])
+        if selected == answer:
+            # 正解時のコイン付与
+            if user_id not in coins:
+                coins[user_id] = 1000
             coins[user_id] += 100
             save_coins()
-            return
+            await i.response.send_message(f"✅ 正解なえ！100ナエン獲得！\n現在のナエン: {coins[user_id]}", ephemeral=True)
         else:
-            await interaction.followup.send("❌ 不正な演算子なえ！")
-            return
-    except Exception as e:
-        await interaction.followup.send(f"❌ エラーが発生したなえ: {e}")
-        return
+            await i.response.send_message(f"❌ 残念、正解は {answer} だったなえ！", ephemeral=True)
 
-    # 成功時に100ナエン付与
-    coins[user_id] += 100
-    save_coins()
+        view.stop()
 
-    await interaction.followup.send(f"{a} {op.value} {b} = {res}\n🎉 計算成功で100ナエン獲得！ 現在の所持ナエン: {coins[user_id]}ナエンなえ！")
+    for item in view.children:
+        if isinstance(item, ui.Button):
+            item.callback = on_button_click
+
+    await interaction.response.send_message(
+        f"🧠 **問題:** {a} + {b} は？ 選択肢から答えてなえ！",
+        view=view,
+        ephemeral=True
+    )
 
 # ====== スロット（ベット機能付き） ======
 
