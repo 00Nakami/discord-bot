@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 import asyncio
 from data import all_items, rarity_info  # ← これで使えるようになる
 from discord import ui
+from battle import setup as setup_battle
 
 # --- 環境変数読み込み ---
 load_dotenv()
@@ -224,7 +225,7 @@ async def janken(interaction: discord.Interaction, hand: app_commands.Choice[str
         stats[user_id]["max_lose_streak"] = max(stats[user_id]["max_lose_streak"], stats[user_id]["lose_streak"])
         stats[user_id]["streak"] = 0
         stats[user_id]["draw_streak"] = 0
-        reward = int(bet * 0.1)
+        reward = int(bet * 0.25)
         bot_comment = random.choice(BOT_QUOTES["lose"])
 
     coins[user_id] += reward
@@ -247,6 +248,8 @@ async def janken(interaction: discord.Interaction, hand: app_commands.Choice[str
         f"🪙 現在の所持ナエン: {coins[user_id]}ナエン\n"
         f"💬 なえくんBot: {bot_comment}"
     )
+
+bot.load_extension("battle")
 
 @bot.tree.command(name="janken_stats", description="あなたのじゃんけん戦績を表示します")
 async def janken_stats(interaction: discord.Interaction):
@@ -346,13 +349,17 @@ async def omikuji(interaction: discord.Interaction):
     if choice.startswith("大苗"):
         reward = 10000
     elif choice.startswith("中苗"):
-        reward = 2000
+        reward = 1500
+    elif choice.startswith("小苗"):
+        reward = 750
+    elif choice.startswith("末苗"):
+        reward = 750
     elif choice.startswith("狐") and not choice.startswith("大狐"):
         reward = 500
     elif choice.startswith("大狐"):
         reward = 0
     else:
-        reward = 100
+        reward = 1000
 
     coins[user_id] += reward
     save_coins()
@@ -530,7 +537,7 @@ async def mathquiz(interaction: discord.Interaction):
 class SlotView(View):
     def __init__(self, user, bet):
         super().__init__(timeout=60)
-        self.emojis = ["🐧", "🦊", "🐟", "😹"]
+        self.emojis = ["🐧", "🦊", "🐟", "😹", "🐹"]
         self.running = False
         self.message = None
         self.user = user
@@ -566,11 +573,11 @@ class SlotView(View):
 
         # 結果判定と配当
         if final_slots[0] == final_slots[1] == final_slots[2]:
-            winnings = self.bet * 3
+            winnings = self.bet * 5
             coins[user_id] = user_coins + winnings
             result_msg = f"🎉 大当たり！ {''.join(final_slots)} が揃ったなえ！\n💰 {winnings}ナエン獲得！"
         elif final_slots[0] == final_slots[1] or final_slots[1] == final_slots[2] or final_slots[0] == final_slots[2]:
-            winnings = int(self.bet * 1.5)
+            winnings = int(self.bet * 2)
             coins[user_id] = user_coins + winnings
             result_msg = f"🙂 小当たり！ {''.join(final_slots)} のペアが揃ったなえ！\n💰 {winnings}ナエン獲得！"
         else:
@@ -1163,6 +1170,8 @@ async def help_command(interaction: discord.Interaction):
     embed.set_footer(text="なえくんBotで遊んでくれてありなえ〜！")
 
     await interaction.response.send_message(embed=embed)
+
+setup_battle(bot)
 
 # --- Bot起動 ---
 bot.run(DISCORD_TOKEN)
