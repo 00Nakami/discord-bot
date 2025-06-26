@@ -250,6 +250,7 @@ async def janken(interaction: discord.Interaction, hand: app_commands.Choice[str
     )
 
 bot.load_extension("battle")
+setup_battle(bot)
 
 @bot.tree.command(name="janken_stats", description="あなたのじゃんけん戦績を表示します")
 async def janken_stats(interaction: discord.Interaction):
@@ -1170,8 +1171,6 @@ async def help_command(interaction: discord.Interaction):
     embed.set_footer(text="なえくんBotで遊んでくれてありなえ〜！")
 
     await interaction.response.send_message(embed=embed)
-
-setup_battle(bot)
 
 # --- Bot起動 ---
 bot.run(DISCORD_TOKEN)
