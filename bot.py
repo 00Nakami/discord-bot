@@ -13,9 +13,6 @@ from dotenv import load_dotenv
 import asyncio
 from data import all_items, rarity_info  # ← これで使えるようになる
 from discord import ui
-from save_to_github import save_to_github
-import subprocess
-
 
 # --- 環境変数読み込み ---
 load_dotenv()
@@ -59,10 +56,6 @@ def load_stats():
     else:
         stats = {}
 
-def save_items():
-    with open("items.json", "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
-
 def save_stats():
     with open(STATS_FILE, "w", encoding="utf-8") as f:
         json.dump(stats, f, ensure_ascii=False, indent=2)
@@ -100,32 +93,15 @@ def add_item_to_user(user_id: str, item_name: str, count: int = 1):
         items[user_id][item_name] = count
     save_items(items)
 
-def save_to_github():
-    try:
-        subprocess.run(["git", "add", "coins.json", "items.json"], check=True)
-        # 差分がある場合のみコミット・プッシュ
-        result = subprocess.run(["git", "diff", "--cached", "--quiet"])
-        if result.returncode != 0:
-            subprocess.run(["git", "commit", "-m", "Auto-save: updated data"], check=True)
-            subprocess.run(["git", "push", "origin", "main"], check=True)
-            print("✅ 変更を GitHub に保存しました")
-        else:
-            print("🕊️ 変更はなかったので push しませんでした")
-    except subprocess.CalledProcessError as e:
-        print("⚠️ GitHub 保存中にエラー:", e)
-
-
 load_stats()
 load_coins()
-save_items()
-save_to_github()
 
 # --- ユーティリティ関数 ---
 
 def judge(user_hand, bot_hand):
     """じゃんけんの勝敗判定"""
     # グー:0, チョキ:1, パー:2 のルールで計算
-    mapping = {"ぐー":0, "ちょき":1, "ぱー":2}
+    mapping = {"ぐー":2, "ちょき":1, "ぱー":0}
     user = mapping[user_hand]
     bot_ = mapping[bot_hand]
     if user == bot_:
@@ -160,7 +136,7 @@ async def on_ready():
 @bot.tree.command(name="janken", description="じゃんけんするなえ！（ぐー・ちょき・ぱー）")
 @app_commands.describe(
     hand="あなたの手を選んでください",
-    bet="ベットするナエンの数（100〜10000）"
+    bet="ベットするナエンの数（100〜1,000,000）"
 )
 @app_commands.choices(hand=[
     app_commands.Choice(name="ぐー ✊", value="ぐー"),
@@ -178,8 +154,8 @@ async def janken(interaction: discord.Interaction, hand: app_commands.Choice[str
     bot_hand = random.choice(JANKEN_CHOICES)
     result = judge(user_hand, bot_hand)
 
-    if bet < 100 or bet > 10000:
-        await interaction.followup.send("❌ ベットは100〜10000ナエンの範囲で指定してなえ！", ephemeral=True)
+    if bet < 100 or bet > 1000000:
+        await interaction.followup.send("❌ ベットは100〜1,000,000ナエンの範囲で指定してなえ！", ephemeral=True)
         return
 
     initialize_user_stats(user_id)
@@ -248,7 +224,7 @@ async def janken(interaction: discord.Interaction, hand: app_commands.Choice[str
         stats[user_id]["max_lose_streak"] = max(stats[user_id]["max_lose_streak"], stats[user_id]["lose_streak"])
         stats[user_id]["streak"] = 0
         stats[user_id]["draw_streak"] = 0
-        reward = int(bet * 0.5)
+        reward = int(bet * 0.1)
         bot_comment = random.choice(BOT_QUOTES["lose"])
 
     coins[user_id] += reward
@@ -376,14 +352,14 @@ async def omikuji(interaction: discord.Interaction):
     elif choice.startswith("大狐"):
         reward = 0
     else:
-        reward = 1000
+        reward = 100
 
     coins[user_id] += reward
     save_coins()
 
     await interaction.followup.send(
         f"🎋 {interaction.user.mention} さんのなえみくじ結果は **{choice}** なえ〜\n"
-        f"💰 手数料: 100ナエン\n"
+        f"💰 手数料: 1000ナエン\n"
         f"🎁 獲得ナエン: {reward}ナエン\n"
         f"🪙 現在の所持ナエン: {coins[user_id]}ナエン"
     )
@@ -484,10 +460,10 @@ async def mathquiz(interaction: discord.Interaction):
     except discord.NotFound:
         pass
 
-# ====== 計算コマンド(激むず) ======
+# ====== 計算コマンド ======
 pending_questions = {}
 
-@bot.tree.command(name="sansuu_hell", description="計算問題に正解してナエンをゲットするなえ！（激むず）")
+@bot.tree.command(name="sansuu_hell", description="計算問題に正解してナエンをゲットするなえ！")
 async def mathquiz(interaction: discord.Interaction):
     user_id = str(interaction.user.id)
     coins.setdefault(user_id, 1000)
@@ -514,7 +490,7 @@ async def mathquiz(interaction: discord.Interaction):
 
     # 出題用Embedを送信
     embed = discord.Embed(
-        title="🧮 計算クイズ（激むず）",
+        title="🧮 計算クイズ(地獄)",
         description=question,
         color=discord.Color.blurple()
     )
@@ -554,7 +530,7 @@ async def mathquiz(interaction: discord.Interaction):
 class SlotView(View):
     def __init__(self, user, bet):
         super().__init__(timeout=60)
-        self.emojis = ["🐧", "🐹", "🦊", "🐟", "😹"]
+        self.emojis = ["🐧", "🦊", "🐟", "😹"]
         self.running = False
         self.message = None
         self.user = user
@@ -610,7 +586,7 @@ class SlotView(View):
     @discord.ui.button(label="回す", style=discord.ButtonStyle.green)
     async def spin(self, interaction: Interaction, button: Button):
         if interaction.user.id != self.user.id:
-            await interaction.response.send_message("⚠️ これはあなたのスロットじゃないなえ！", ephemeral=True)
+            await interaction.response.send_message("⚠️ これはあなたのスロットじゃなえ！", ephemeral=True)
             return
 
         if self.running:
@@ -902,7 +878,7 @@ async def gacha(interaction: discord.Interaction):
 
     # ナエンチェック
     if coins[user_id] < 1000:
-        await interaction.followup.send(f"❌ ナエンが足りないなえ！現在の所持: {coins[user_id]}ナエン", ephemeral=True)
+        await interaction.followup.send(f"❌ ナエンが足りなえ！現在の所持: {coins[user_id]}ナエン", ephemeral=True)
         return
 
     # ナエンを消費
@@ -1176,7 +1152,8 @@ async def help_command(interaction: discord.Interaction):
     ), inline=False)
 
     embed.add_field(name="🧮 計算", value=(
-        "`/sansuu` - 計算問題ができるなえ！（正解するたびにナエンがもらなえ！）"
+        "`/sansuu` - 簡単な整数計算ができるなえ！（使うだけでナエンがもらなえ！）"
+        "`/sansuu_hell` - 難しい整数計算ができるなえ！（使うだけでナエンがもらなえ！）"
     ), inline=False)
 
     embed.add_field(name="🥱 便利", value=(
