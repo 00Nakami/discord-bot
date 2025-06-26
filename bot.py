@@ -13,7 +13,6 @@ from dotenv import load_dotenv
 import asyncio
 from data import all_items, rarity_info  # ← これで使えるようになる
 from discord import ui
-from battle import setup as setup_battle
 
 # --- 環境変数読み込み ---
 load_dotenv()
@@ -248,9 +247,6 @@ async def janken(interaction: discord.Interaction, hand: app_commands.Choice[str
         f"🪙 現在の所持ナエン: {coins[user_id]}ナエン\n"
         f"💬 なえくんBot: {bot_comment}"
     )
-
-bot.load_extension("battle")
-setup_battle(bot)
 
 @bot.tree.command(name="janken_stats", description="あなたのじゃんけん戦績を表示します")
 async def janken_stats(interaction: discord.Interaction):
